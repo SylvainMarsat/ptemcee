@@ -134,6 +134,9 @@ class MPIPool(object):
         '''
         ntask = len(tasks)
 
+        #TEST
+        #print("inside mpi_pool map", flush=True)
+
         # If not the master just wait for instructions.
         if not self.is_master():
             self.wait()
@@ -183,6 +186,9 @@ class MPIPool(object):
                           .format(worker, i))
                 result = self.comm.recv(source=worker, tag=i)
                 results.append(result)
+
+            #TEST
+            #print(results, flush=True)
 
             return results
 

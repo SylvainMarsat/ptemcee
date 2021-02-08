@@ -161,6 +161,10 @@ class Sampler(object):
 
     betas = attr.ib(default=None)
 
+    # Extra proposal: branching probability and jump function
+    extra_proposal_prob = attr.ib(converter=float, default=0.)
+    extra_proposal_jump = attr.ib(default=None)
+
     # Tuning parameters.
     adaptive = attr.ib(converter=bool, default=False)
     adaptation_lag = attr.ib(converter=int, default=10000)
@@ -189,6 +193,12 @@ class Sampler(object):
             raise ValueError('Need at least one temperature!')
         if (value < 0).any():
             raise ValueError('Temperatures must be non-negative.')
+
+    # TODO: check that if extra_proposal_prob>0, extra_proposal_jump is not None
+    @extra_proposal_prob.validator
+    def _validate_extra_proposal_prob(self, attribute, value):
+        if value < 0. or value > 1.:
+            raise ValueError('Extra proposal probability must be in [0,1].')
 
     @logl.validator
     @logp.validator
@@ -229,7 +239,9 @@ class Sampler(object):
                                  config=config,
                                  adaptive=self.adaptive,
                                  random=random,
-                                 mapper=self._mapper)
+                                 mapper=self._mapper,
+                                 extra_proposal_prob=self.extra_proposal_prob,
+                                 extra_proposal_jump=self.extra_proposal_jump)
 
     def sample(self, x, random=None, thin_by=None):
         """
