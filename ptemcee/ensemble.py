@@ -106,6 +106,9 @@ class Ensemble(object):
         t = self.ntemps
         loga = np.log(self._config.scale_factor)
 
+        # Presence of an extra proposal
+        extra_proposal = (not extra_proposal_jump is None) and (extra_proposal_prob>0.)
+
         for j in [0, 1]:
             # Get positions of walkers to be updated and walker to be sampled.
             j_update = j
@@ -116,7 +119,7 @@ class Ensemble(object):
             z = np.exp(self._random.uniform(low=-loga, high=loga, size=(t, w)))
             y = np.empty((t, w, d))
             # Case where no extra proposal is used
-            if (extra_proposal_jump is None) or (extra_proposal_prob==0.):
+            if not extra_proposal:
                 for k in range(t):
                     js = self._random.randint(0, high=w, size=w)
                     y[k, :, :] = (x_sample[k, js, :] +
@@ -124,24 +127,35 @@ class Ensemble(object):
                                   (x_update[k, :, :] - x_sample[k, js, :]))
             # Case where we use an extra proposal
             else:
+                # Determining which walkers will be updated with extra proposal
+                extra_p = self._random.uniform(low=0., high=1., size=(t,w))
+                extra_mask = extra_p < extra_proposal_prob
+                stretch_mask = ~extra_mask
                 for k in range(t):
-                    # Determining which walkers will be updated with extra proposal
-                    extra_p = self._random.uniform(low=0., high=1., size=w)
-                    extra_mask = extra_p < extra_proposal_prob
-                    stretch_mask = ~extra_mask
-                    n_stretch = np.sum(stretch_mask)
+                    n_stretch = np.sum(stretch_mask[k])
                     # Update some walkers with the normal stretch move
                     js = self._random.randint(0, high=w, size=n_stretch)
-                    y[k, stretch_mask, :] = (x_sample[k, js, :] +
-                                  z[k, stretch_mask].reshape((n_stretch, 1)) *
-                                  (x_update[k, stretch_mask, :] - x_sample[k, js, :]))
+                    y[k, stretch_mask[k], :] = (x_sample[k, js, :] +
+                                  z[k, stretch_mask[k]].reshape((n_stretch, 1)) *
+                                  (x_update[k, stretch_mask[k], :] - x_sample[k, js, :]))
                     # Update the others with the extra proposal
-                    y[k, extra_mask, :] = extra_proposal_jump(x_update[k, extra_mask, :], random_state=self._random)
+                    y[k, extra_mask[k], :] = extra_proposal_jump(x_update[k, extra_mask[k], :], random_state=self._random)
 
             y_logl, y_logp = self._evaluate(y)
             y_logP = self._tempered_likelihood(y_logl) + y_logp
 
-            logp_accept = d * np.log(z) + y_logP - logP[:, j_update::2]
+            # Acceptance probability            
+            logp_accept = np.zeros((t,w), dtype=float)
+            # Case where no extra proposal is used
+            if not extra_proposal:
+                logp_accept = d * np.log(z) + y_logP - logP[:, j_update::2]
+            # Case where we use an extra proposal
+            else:
+                # Acceptance probability with stretch-move volume element z^d
+                logp_accept[stretch_mask] = d * np.log(z[stretch_mask]) + y_logP[stretch_mask] - logP[:, j_update::2][stretch_mask]
+                # Normal acceptance probability for extra proposal
+                logp_accept[extra_mask] = y_logP[extra_mask] - logP[:, j_update::2][extra_mask]
+
             logr = np.log(self._random.uniform(low=0, high=1, size=(t, w)))
 
             accepts = logr < logp_accept
