@@ -165,6 +165,9 @@ class Sampler(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Wrapping moduli, typically 2pi or pi for phases or polarization
+    list_param_wrap = attr.ib(default=None)
+
     # Tuning parameters.
     adaptive = attr.ib(converter=bool, default=False)
     adaptation_lag = attr.ib(converter=int, default=10000)
@@ -241,7 +244,8 @@ class Sampler(object):
                                  random=random,
                                  mapper=self._mapper,
                                  extra_proposal_prob=self.extra_proposal_prob,
-                                 extra_proposal_jump=self.extra_proposal_jump)
+                                 extra_proposal_jump=self.extra_proposal_jump,
+                                 list_param_wrap=self.list_param_wrap)
 
     def sample(self, x, random=None, thin_by=None):
         """

@@ -54,6 +54,11 @@ class Ensemble(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Allows to wrap parameters given a list of moduli (typically [-pi,pi]):
+    # the difference between two points used for the stretch move is now the
+    # 'shortest distance' difference taking into account mod.
+    list_param_wrap = attr.ib(default=None)
+
     @_mapper.validator
     def _is_callable(self, attribute, value):
         if not callable(value):
@@ -80,7 +85,7 @@ class Ensemble(object):
             raise ValueError('Attempting to start with samples outside posterior support.')
 
     def step(self):
-        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump)
+        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.list_param_wrap)
         self.x = self._temperature_swaps(self.x, self.logP, self.logl)
         ratios = self.swaps_accepted / self.swaps_proposed
 
@@ -94,7 +99,7 @@ class Ensemble(object):
 
         self.time += 1
 
-    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None):
+    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None, list_param_wrap=None):
         """
         Perform the stretch-move proposal on each ensemble.py.
 
@@ -122,9 +127,9 @@ class Ensemble(object):
             if not extra_proposal:
                 for k in range(t):
                     js = self._random.randint(0, high=w, size=w)
-                    y[k, :, :] = (x_sample[k, js, :] +
+                    y[k, :, :] = util.mod_arr(x_sample[k, js, :] +
                                   z[k, :].reshape((w, 1)) *
-                                  (x_update[k, :, :] - x_sample[k, js, :]))
+                                  util.mod_diff_arr(x_update[k, :, :], x_sample[k, js, :], list_mod=list_param_wrap), list_mod=list_param_wrap)
             # Case where we use an extra proposal
             else:
                 # Determining which walkers will be updated with extra proposal
@@ -135,16 +140,16 @@ class Ensemble(object):
                     n_stretch = np.sum(stretch_mask[k])
                     # Update some walkers with the normal stretch move
                     js = self._random.randint(0, high=w, size=n_stretch)
-                    y[k, stretch_mask[k], :] = (x_sample[k, js, :] +
+                    y[k, stretch_mask[k], :] = util.mod_arr(x_sample[k, js, :] +
                                   z[k, stretch_mask[k]].reshape((n_stretch, 1)) *
-                                  (x_update[k, stretch_mask[k], :] - x_sample[k, js, :]))
+                                  util.mod_diff_arr(x_update[k, stretch_mask[k], :], x_sample[k, js, :], list_mod=list_param_wrap), list_mod=list_param_wrap)
                     # Update the others with the extra proposal
                     y[k, extra_mask[k], :] = extra_proposal_jump(x_update[k, extra_mask[k], :], random_state=self._random)
 
             y_logl, y_logp = self._evaluate(y)
             y_logP = self._tempered_likelihood(y_logl) + y_logp
 
-            # Acceptance probability            
+            # Acceptance probability
             logp_accept = np.zeros((t,w), dtype=float)
             # Case where no extra proposal is used
             if not extra_proposal:

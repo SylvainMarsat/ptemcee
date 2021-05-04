@@ -8,6 +8,85 @@ __all__ = ['_ladder', 'get_acf', 'get_integrated_act', 'thermodynamic_integratio
 import numpy as np
 
 
+def mod_interval(x, interval=None):
+    """
+    Remainder of x (can be a vector) on an interval ]a,b]
+    Args:
+      x          # Input data, can be a vector (no check)
+    Kwargs:
+      interval   # Target interval, list [a,b] for mod in ]a,b]
+                   (default None, ignore)
+    """
+    if interval is None:
+        return x
+    else:
+        a, b = interval
+        return b - np.remainder(b-x, b-a)
+
+def mod_diff_interval(x, y, interval=None):
+    """
+    Mod-diff x-y (float or 1-d array) for list of intervals ]a,b]
+    Returns the difference with the shortest path taking into account mod
+    Args:
+      x          # Input data, can be a vector (no check)
+      y          # Input data, can be a vector (no check)
+    Kwargs:
+      interval   # Target interval, list [a,b] for mod in ]a,b]
+                   (default None, ignore)
+    """
+    if interval is None:
+        return x - y
+    else:
+        a, b = interval
+        modx = mod_interval(x, interval=interval)
+        mody = mod_interval(y, interval=interval)
+        mod_diff = mody - modx
+        diffs = np.array([mod_diff - (b-a), mod_diff, mod_diff + (b-a)])
+        n = len(x)
+        return diffs[np.argmin(np.abs(diffs), axis=0), np.arange(n)]
+
+def mod_arr(x, list_mod=None):
+    """
+    Remainder of x (2-d array) on a list of intervals ]a,b]
+    Applies mod_interval with list_mod[i] on each column x[:,i]
+    Args:
+      x          # Input data, 2d array (no check)
+    Kwargs:
+      list_mod   # List of target intervals for each dimension: None to ignore,
+                   or list [a,b] for mod in ]a,b]
+                   (default None, ignore entirely)
+    """
+    if list_mod is None:
+        return x
+    else:
+        x_mod = x.copy()
+        ndim = x.shape[1]
+        for i in range(ndim):
+            x_mod[:,i] = mod_interval(x[:,i], interval=list_mod[i])
+        return x_mod
+
+def mod_diff_arr(x, y, list_mod=None):
+    """
+    Mod-diff x-y (2-d array) for list of intervals ]a,b]
+    Returns the difference with the shortest path taking into account mod
+    Applies mod_diff_interval with list_mod[i] on each column x[:,i], y[:,i]
+    Args:
+      x          # Input data, 2d array (no check)
+      y          # Input data, 2d array (no check)
+    Kwargs:
+      list_mod   # List of target intervals for each dimension: None to ignore,
+                   or list [a,b] for mod in ]a,b]
+                   (default None, ignore entirely)
+    """
+    if list_mod is None:
+        return x - y
+    else:
+        diff_mod = np.zeros_like(x)
+        ndim = x.shape[1]
+        for i in range(ndim):
+            diff_mod[:,i] = mod_diff_interval(x[:,i], y[:,i], interval=list_mod[i])
+        return diff_mod
+
 def _ladder(betas):
     """
     Convert an arbitrary iterable of floats into a sorted numpy array.
