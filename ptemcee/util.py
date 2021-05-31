@@ -40,7 +40,7 @@ def mod_diff_interval(x, y, interval=None):
         a, b = interval
         modx = mod_interval(x, interval=interval)
         mody = mod_interval(y, interval=interval)
-        mod_diff = mody - modx
+        mod_diff = modx - mody
         diffs = np.array([mod_diff - (b-a), mod_diff, mod_diff + (b-a)])
         n = len(x)
         return diffs[np.argmin(np.abs(diffs), axis=0), np.arange(n)]
