@@ -250,7 +250,7 @@ class Sampler(object):
                                  mapper=self._mapper,
                                  extra_proposal_prob=self.extra_proposal_prob,
                                  extra_proposal_jump=self.extra_proposal_jump,
-                                 ensemble_proposal=self.extra_proposal,
+                                 ensemble_proposal=self.ensemble_proposal,
                                  list_param_wrap=self.list_param_wrap)
 
     def sample(self, x, random=None, thin_by=None):
