@@ -54,6 +54,11 @@ class Ensemble(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Ensemble proposal:
+    # ~1/sqrt(z) with volume element z^(d-1) for emcee
+    # ~1/z with volume element z^d for ptemcee
+    ensemble_proposal = attr.ib(converter=str, default='ptemcee')
+
     # Allows to wrap parameters given a list of moduli (typically [-pi,pi]):
     # the difference between two points used for the stretch move is now the
     # 'shortest distance' difference taking into account mod.
@@ -85,7 +90,7 @@ class Ensemble(object):
             raise ValueError('Attempting to start with samples outside posterior support.')
 
     def step(self):
-        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.list_param_wrap)
+        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.list_param_wrap, self.ensemble_proposal)
         self.x = self._temperature_swaps(self.x, self.logP, self.logl)
         ratios = self.swaps_accepted / self.swaps_proposed
 
@@ -99,7 +104,7 @@ class Ensemble(object):
 
         self.time += 1
 
-    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None, list_param_wrap=None):
+    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None, list_param_wrap=None, ensemble_proposal='ptemcee'):
         """
         Perform the stretch-move proposal on each ensemble.py.
 
@@ -110,6 +115,7 @@ class Ensemble(object):
         d = self.ndim
         t = self.ntemps
         loga = np.log(self._config.scale_factor)
+        sqrta = np.sqrt(self._config.scale_factor)
 
         # Presence of an extra proposal
         extra_proposal = (not extra_proposal_jump is None) and (extra_proposal_prob>0.)
@@ -121,7 +127,14 @@ class Ensemble(object):
             x_update = x[:, j_update::2, :]
             x_sample = x[:, j_sample::2, :]
 
-            z = np.exp(self._random.uniform(low=-loga, high=loga, size=(t, w)))
+            if ensemble_proposal=='ptemcee':
+                z = np.exp(self._random.uniform(low=-loga, high=loga, size=(t, w)))
+                volume_exponent = d
+            elif ensemble_proposal=='emcee': # Note: ~1/sqrt(z) between 1./a and a
+                z = (1/sqrta + (sqrta - 1./sqrta) * self._random.uniform(low=0., high=1., size=(t, w))))**2
+                volume_exponent = d-1
+            else:
+                raise ValueError('ensemble_proposal not recognized: %s' % ensemble_proposal)
             y = np.empty((t, w, d))
             # Case where no extra proposal is used
             if not extra_proposal:
@@ -153,11 +166,11 @@ class Ensemble(object):
             logp_accept = np.zeros((t,w), dtype=float)
             # Case where no extra proposal is used
             if not extra_proposal:
-                logp_accept = d * np.log(z) + y_logP - logP[:, j_update::2]
+                logp_accept = volume_exponent * np.log(z) + y_logP - logP[:, j_update::2]
             # Case where we use an extra proposal
             else:
                 # Acceptance probability with stretch-move volume element z^d
-                logp_accept[stretch_mask] = d * np.log(z[stretch_mask]) + y_logP[stretch_mask] - logP[:, j_update::2][stretch_mask]
+                logp_accept[stretch_mask] = volume_exponent * np.log(z[stretch_mask]) + y_logP[stretch_mask] - logP[:, j_update::2][stretch_mask]
                 # Normal acceptance probability for extra proposal
                 logp_accept[extra_mask] = y_logP[extra_mask] - logP[:, j_update::2][extra_mask]
 

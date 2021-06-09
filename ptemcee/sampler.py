@@ -165,6 +165,11 @@ class Sampler(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Ensemble proposal:
+    # ~1/sqrt(z) with volume element z^(d-1) for emcee
+    # ~1/z with volume element z^d for ptemcee
+    ensemble_proposal = attr.ib(converter=str, default='ptemcee')
+
     # Wrapping moduli, typically 2pi or pi for phases or polarization
     list_param_wrap = attr.ib(default=None)
 
@@ -245,6 +250,7 @@ class Sampler(object):
                                  mapper=self._mapper,
                                  extra_proposal_prob=self.extra_proposal_prob,
                                  extra_proposal_jump=self.extra_proposal_jump,
+                                 ensemble_proposal=self.extra_proposal,
                                  list_param_wrap=self.list_param_wrap)
 
     def sample(self, x, random=None, thin_by=None):
