@@ -131,7 +131,7 @@ class Ensemble(object):
                 z = np.exp(self._random.uniform(low=-loga, high=loga, size=(t, w)))
                 volume_exponent = d
             elif ensemble_proposal=='emcee': # Note: ~1/sqrt(z) between 1./a and a
-                z = (1/sqrta + (sqrta - 1./sqrta) * self._random.uniform(low=0., high=1., size=(t, w))))**2
+                z = (1/sqrta + (sqrta - 1./sqrta) * self._random.uniform(low=0., high=1., size=(t, w)))**2
                 volume_exponent = d-1
             else:
                 raise ValueError('ensemble_proposal not recognized: %s' % ensemble_proposal)
