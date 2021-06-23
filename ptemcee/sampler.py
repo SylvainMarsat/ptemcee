@@ -165,6 +165,11 @@ class Sampler(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Subset of x that is to be used for ensemble proposals
+    # Allows to have ndim_ensemble ordinary parameters,
+    # followed by ndim-ndim_ensemble extra params, for instance discrete
+    ndim_ensemble = attr.ib(type=int, default=None)
+
     # Ensemble proposal:
     # ~1/sqrt(z) with volume element z^(d-1) for emcee
     # ~1/z with volume element z^d for ptemcee
@@ -208,6 +213,11 @@ class Sampler(object):
         if value < 0. or value > 1.:
             raise ValueError('Extra proposal probability must be in [0,1].')
 
+    @ndim_ensemble.validator
+    def _validate_ndim_ensemble(self, attribute, value):
+        if value < 0:
+            raise ValueError('Dimension of subset for ensemble proposal must be >=0.')
+
     @logl.validator
     @logp.validator
     def _is_callable(self, attribute, value):
@@ -250,6 +260,7 @@ class Sampler(object):
                                  mapper=self._mapper,
                                  extra_proposal_prob=self.extra_proposal_prob,
                                  extra_proposal_jump=self.extra_proposal_jump,
+                                 ndim_ensemble=self.ndim_ensemble,
                                  ensemble_proposal=self.ensemble_proposal,
                                  list_param_wrap=self.list_param_wrap)
 

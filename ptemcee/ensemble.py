@@ -54,6 +54,11 @@ class Ensemble(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Subset of x that is to be used for ensemble proposals
+    # Allows to have ndim_ensemble ordinary parameters,
+    # followed by ndim-ndim_ensemble extra params, for instance discrete
+    ndim_ensemble = attr.ib(type=int, default=None)
+
     # Ensemble proposal:
     # ~1/sqrt(z) with volume element z^(d-1) for emcee
     # ~1/z with volume element z^d for ptemcee
@@ -62,6 +67,7 @@ class Ensemble(object):
     # Allows to wrap parameters given a list of moduli (typically [-pi,pi]):
     # the difference between two points used for the stretch move is now the
     # 'shortest distance' difference taking into account mod.
+    # NOTE: length of this must be matching ndim_ensemble
     list_param_wrap = attr.ib(default=None)
 
     @_mapper.validator
@@ -90,7 +96,7 @@ class Ensemble(object):
             raise ValueError('Attempting to start with samples outside posterior support.')
 
     def step(self):
-        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.list_param_wrap, self.ensemble_proposal)
+        self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.ndim_ensemble, self.list_param_wrap, self.ensemble_proposal)
         self.x = self._temperature_swaps(self.x, self.logP, self.logl)
         ratios = self.swaps_accepted / self.swaps_proposed
 
@@ -104,7 +110,7 @@ class Ensemble(object):
 
         self.time += 1
 
-    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None, list_param_wrap=None, ensemble_proposal='ptemcee'):
+    def _stretch(self, x, logP, logl, extra_proposal_prob=0., extra_proposal_jump=None, ndim_ensemble=None, list_param_wrap=None, ensemble_proposal='ptemcee'):
         """
         Perform the stretch-move proposal on each ensemble.py.
 
@@ -116,6 +122,12 @@ class Ensemble(object):
         t = self.ntemps
         loga = np.log(self._config.scale_factor)
         sqrta = np.sqrt(self._config.scale_factor)
+
+        # Subset of dimensions to be used for ensemble proposal
+        if ndim_ensemble is None:
+            d_ens = d
+        else:
+            d_ens = ndim_ensemble
 
         # Presence of an extra proposal
         extra_proposal = (not extra_proposal_jump is None) and (extra_proposal_prob>0.)
@@ -140,9 +152,11 @@ class Ensemble(object):
             if not extra_proposal:
                 for k in range(t):
                     js = self._random.randint(0, high=w, size=w)
-                    y[k, :, :] = util.mod_arr(x_sample[k, js, :] +
+                    y[k, :, :d_ens] = util.mod_arr(x_sample[k, js, :d_ens] +
                                   z[k, :].reshape((w, 1)) *
-                                  util.mod_diff_arr(x_update[k, :, :], x_sample[k, js, :], list_mod=list_param_wrap), list_mod=list_param_wrap)
+                                  util.mod_diff_arr(x_update[k, :, :d_ens], x_sample[k, js, :d_ens], list_mod=list_param_wrap), list_mod=list_param_wrap)
+                    # Keep identical dimensions beyond ndim_ensemble
+                    y[k, :, d_ens:] = x_update[k, :, d_ens:]
             # Case where we use an extra proposal
             else:
                 # Determining which walkers will be updated with extra proposal
@@ -153,9 +167,11 @@ class Ensemble(object):
                     n_stretch = np.sum(stretch_mask[k])
                     # Update some walkers with the normal stretch move
                     js = self._random.randint(0, high=w, size=n_stretch)
-                    y[k, stretch_mask[k], :] = util.mod_arr(x_sample[k, js, :] +
+                    y[k, stretch_mask[k], :d_ens] = util.mod_arr(x_sample[k, js, :d_ens] +
                                   z[k, stretch_mask[k]].reshape((n_stretch, 1)) *
-                                  util.mod_diff_arr(x_update[k, stretch_mask[k], :], x_sample[k, js, :], list_mod=list_param_wrap), list_mod=list_param_wrap)
+                                  util.mod_diff_arr(x_update[k, stretch_mask[k], :d_ens], x_sample[k, js, :d_ens], list_mod=list_param_wrap), list_mod=list_param_wrap)
+                    # Keep identical dimensions beyond ndim_ensemble
+                    y[k, stretch_mask[k], d_ens:] = x_update[k, stretch_mask[k], d_ens:]
                     # Update the others with the extra proposal
                     y[k, extra_mask[k], :] = extra_proposal_jump(x_update[k, extra_mask[k], :], random_state=self._random)
 
@@ -195,10 +211,7 @@ class Ensemble(object):
         shape = x.shape[:-1]
         values = x.reshape((-1, self.ndim))
         length = len(values)
-        #TEST
-        #print("before _mapper", flush=True)
         res = self._mapper(self._config.evaluator, values)
-        #print(res, flush=True)
         results = itertools.chain.from_iterable(res)
         #results = itertools.chain.from_iterable(self._mapper(self._config.evaluator, values))
 
