@@ -215,7 +215,7 @@ class Sampler(object):
 
     @ndim_ensemble.validator
     def _validate_ndim_ensemble(self, attribute, value):
-        if value < 0:
+        if (value is not None) and (value < 0):
             raise ValueError('Dimension of subset for ensemble proposal must be >=0.')
 
     @logl.validator
