@@ -175,6 +175,9 @@ class Sampler(object):
     # ~1/z with volume element z^d for ptemcee
     ensemble_proposal = attr.ib(converter=str, default='ptemcee')
 
+    # Swap permutation method: random, or opposite sort (smaller val matched to largest)
+    swap_perm = attr.ib(converter=str, default='random')
+
     # Wrapping moduli, typically 2pi or pi for phases or polarization
     list_param_wrap = attr.ib(default=None)
 
@@ -262,7 +265,8 @@ class Sampler(object):
                                  extra_proposal_jump=self.extra_proposal_jump,
                                  ndim_ensemble=self.ndim_ensemble,
                                  ensemble_proposal=self.ensemble_proposal,
-                                 list_param_wrap=self.list_param_wrap)
+                                 list_param_wrap=self.list_param_wrap,
+                                 swap_perm=self.swap_perm)
 
     def sample(self, x, random=None, thin_by=None):
         """

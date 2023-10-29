@@ -64,6 +64,9 @@ class Ensemble(object):
     # ~1/z with volume element z^d for ptemcee
     ensemble_proposal = attr.ib(converter=str, default='ptemcee')
 
+    # Swap permutation method: random, or opposite sort (smaller val matched to largest)
+    swap_perm = attr.ib(converter=str, default='random')
+
     # Allows to wrap parameters given a list of moduli (typically [-pi,pi]):
     # the difference between two points used for the stretch move is now the
     # 'shortest distance' difference taking into account mod.
@@ -97,7 +100,7 @@ class Ensemble(object):
 
     def step(self):
         self._stretch(self.x, self.logP, self.logl, self.extra_proposal_prob, self.extra_proposal_jump, self.ndim_ensemble, self.list_param_wrap, self.ensemble_proposal)
-        self.x = self._temperature_swaps(self.x, self.logP, self.logl)
+        self.x = self._temperature_swaps(self.x, self.logP, self.logl, self.swap_perm)
         ratios = self.swaps_accepted / self.swaps_proposed
 
         # TODO: Should the notion of a 'complete' iteration really include the temperature adjustment?
@@ -262,7 +265,7 @@ class Ensemble(object):
         # Don't mutate the ladder here; let the client code do that.
         return betas - betas0
 
-    def _temperature_swaps(self, x, logP, logl):
+    def _temperature_swaps(self, x, logP, logl, swap_perm='random'):
         """
         Perform parallel-tempering temperature swaps on the state in ``x`` with associated ``logP`` and ``logl``.
 
@@ -277,8 +280,14 @@ class Ensemble(object):
 
             dbeta = bi1 - bi
 
-            iperm = self._random.permutation(nwalkers)
-            i1perm = self._random.permutation(nwalkers)
+            if swap_perm=='random':
+                iperm = self._random.permutation(nwalkers)
+                i1perm = self._random.permutation(nwalkers)
+            elif swap_perm=='sort_opposite':
+                iperm = np.argsort(logl[i])
+                i1perm = np.argsort(logl[i-1])[::-1]
+            else:
+                raise ValueError('swap_perm not recognized: %s' % swap_perm)
 
             raccept = np.log(self._random.uniform(size=nwalkers))
             paccept = dbeta * (logl[i, iperm] - logl[i - 1, i1perm])
