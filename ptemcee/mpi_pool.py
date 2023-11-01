@@ -3,6 +3,8 @@
 
 from __future__ import (division, print_function, absolute_import,
                         unicode_literals)
+import numpy as np
+
 
 __all__ = ['MPIPool']
 
@@ -134,9 +136,6 @@ class MPIPool(object):
         '''
         ntask = len(tasks)
 
-        #TEST
-        #print("inside mpi_pool map", flush=True)
-
         # If not the master just wait for instructions.
         if not self.is_master():
             self.wait()
@@ -187,9 +186,6 @@ class MPIPool(object):
                 result = self.comm.recv(source=worker, tag=i)
                 results.append(result)
 
-            #TEST
-            #print(results, flush=True)
-
             return results
 
         else:
@@ -231,6 +227,117 @@ class MPIPool(object):
 
             return results
 
+    def wait_arr(self, size_recv, size_send, dtype=np.float64):
+        '''
+        If this isn't the master process, wait for instructions.
+        self.function will be evaluated on Recv'd numpy array before Send'ing the result
+        Have to specify the size and data type of arrays to be received
+
+        '''
+        if self.is_master():
+            raise RuntimeError('Master node told to await jobs.')
+
+        status = MPI.Status()
+
+        # Pre-allocate np array to receive data
+        data_Recv = np.empty(size_recv, dtype=dtype)
+        data_Send = np.empty(size_send, dtype=dtype)
+
+        # NOTE: we will use tag 1 for a normal computation request, tag 0 for a request to close the pool
+
+        while True:
+            # Event loop.
+            # Sit here and await instructions.
+            if self.debug:
+                print('Worker {0} waiting for task.'.format(self.rank))
+
+            # Blocking receive to wait for instructions.
+            self.comm.Recv(data_Recv, source=0, status=status)
+            tag = status.Get_tag()
+            if self.debug:
+                print('Worker {0} got task {1} with tag {2}.'
+                      .format(self.rank, data_Recv, tag))
+
+            # Check if message tag is 0
+            # If so, stop.
+            if tag==0:
+                if self.debug:
+                    print('Worker {0} told to quit.'.format(self.rank))
+                break
+
+            # Check if message tag is 1, in that case compute and send result
+            if tag==1:
+                if self.debug:
+                    print('Worker {0} computing and sending result.'.format(self.rank))
+                task_arr = data_Recv.copy()
+                data_Send[:] = self.function(task_arr)
+                self.comm.Send(data_Send, dest=0, tag=tag)
+
+    def map_arr(self, size_recv, size_send, tasks, dtype=np.float64):
+        '''
+        Like the built-in :func:`map` function, apply a function to all
+        of the values in a list and return the list of results.
+
+        :param size_send:
+            The size of the data to be sent to remote function (set as self.function)
+
+        :param size_recv:
+            The size of the data sent back by remote function (set as self.function)
+
+        :param tasks:
+            The list of numpy arrays for which to compute.
+
+        '''
+        ntask = len(tasks)
+
+        # Pre-allocate np array to receive data
+        data_Recv = np.empty(size_recv, dtype=dtype)
+        if isinstance(size_recv, tuple):
+            size_recv_tuple = size_recv
+        else:
+            size_recv_tuple = (size_recv,)
+        if isinstance(size_send, tuple):
+            size_send_tuple = size_send
+        else:
+            size_send_tuple = (size_send,)
+
+        # # If not the master just wait for instructions.
+        # if not self.is_master():
+        #     self.wait()
+        #     return
+
+        # NOT sending the function with MPI -- has to be set by each worker in wait_arr
+
+        # NOTE: we will use tag 1 for a normal computation request, tag 0 for a request to close the pool
+
+        # Do not perform load-balancing - the default load-balancing
+        # scheme emcee uses.
+
+        # Send all the tasks off and wait for them to be received.
+        requests = []
+        for i, task in enumerate(tasks):
+            worker = i % self.size + 1
+            if self.debug:
+                print('Sent task {0} to worker {1} with tag {2}.'
+                      .format(task, worker, 1))
+            r = self.comm.Isend(task, dest=worker, tag=1)
+            requests.append(r)
+
+        MPI.Request.Waitall(requests)
+
+        # Now wait for the answers.
+        results = []
+        for i in range(ntask):
+            worker = i % self.size + 1
+            if self.debug:
+                print('Master waiting for worker {0} with tag {1}'
+                      .format(worker, 1))
+            self.comm.Recv(data_Recv, source=worker, tag=1)
+            result = data_Recv.copy()
+            results.append(result)
+
+        return results
+
     def bcast(self, *args, **kwargs):
         '''
         Equivalent to mpi4py :func:`bcast` collective operation.
@@ -246,6 +353,17 @@ class MPIPool(object):
         if self.is_master():
             for i in range(self.size):
                 self.comm.isend(_close_pool_message(), dest=i + 1)
+
+    def close_arr(self, size_send):
+        '''
+        Just send a message off to all the pool members which contains
+        the special :class:`_close_pool_message` sentinel.
+
+        '''
+        # NOTE: the array sent is just a placeholder, the close message is tag=0
+        if self.is_master():
+            for i in range(self.size):
+                self.comm.Send(np.zeros(size_send), dest=i+1, tag=0)
 
     def __enter__(self):
         return self

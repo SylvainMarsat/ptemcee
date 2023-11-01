@@ -188,6 +188,7 @@ class Sampler(object):
     scale_factor = attr.ib(converter=float, default=2)
 
     _mapper = attr.ib(default=map)
+    _map_type = attr.ib(default='map')
     _evaluator = attr.ib(type=LikePriorEvaluator, init=False, default=None)
     _data = attr.ib(type=np.ndarray, init=False, default=None)
 
@@ -261,6 +262,7 @@ class Sampler(object):
                                  adaptive=self.adaptive,
                                  random=random,
                                  mapper=self._mapper,
+                                 map_type=self._map_type,
                                  extra_proposal_prob=self.extra_proposal_prob,
                                  extra_proposal_jump=self.extra_proposal_jump,
                                  ndim_ensemble=self.ndim_ensemble,

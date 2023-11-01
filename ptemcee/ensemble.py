@@ -39,6 +39,7 @@ class Ensemble(object):
 
     _random = attr.ib(type=RandomState, validator=instance_of(RandomState), factory=RandomState)
     _mapper = attr.ib(default=map)
+    _map_type = attr.ib(default='map')
 
     time = attr.ib(type=int, init=False, default=0)
     nwalkers = attr.ib(type=int, init=False)
@@ -214,7 +215,12 @@ class Ensemble(object):
         shape = x.shape[:-1]
         values = x.reshape((-1, self.ndim))
         length = len(values)
-        res = self._mapper(self._config.evaluator, values)
+        if self._map_type=='map':
+            res = self._mapper(self._config.evaluator, values)
+        elif self._map_type=='map_arr':
+            size_send = self.ndim
+            size_recv = 2
+            res = self._mapper(size_recv, size_send, values) # Function is to be set when calling wait_arr of mpi pool
         results = itertools.chain.from_iterable(res)
         #results = itertools.chain.from_iterable(self._mapper(self._config.evaluator, values))
 
