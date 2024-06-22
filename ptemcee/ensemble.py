@@ -55,6 +55,9 @@ class Ensemble(object):
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
 
+    # Extra tempering factor: lnL -> lnL/tempering factor
+    temp_factor = attr.ib(default=1.)
+
     # Subset of x that is to be used for ensemble proposals
     # Allows to have ndim_ensemble ordinary parameters,
     # followed by ndim-ndim_ensemble extra params, for instance discrete
@@ -241,8 +244,9 @@ class Ensemble(object):
         if betas is None:
             betas = self.betas
 
+        # NOTE: we added an extra global tempering factor applied to likelihoods
         with np.errstate(invalid='ignore'):
-            loglT = logl * betas[:, None]
+            loglT = logl * betas[:, None] / self.temp_factor
         loglT[np.isnan(loglT)] = -np.inf
 
         return loglT

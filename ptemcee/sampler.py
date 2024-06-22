@@ -161,6 +161,9 @@ class Sampler(object):
 
     betas = attr.ib(default=None)
 
+    # Extra tempering factor: lnL -> lnL/tempering factor
+    temp_factor = attr.ib(default=1.)
+
     # Extra proposal: branching probability and jump function
     extra_proposal_prob = attr.ib(converter=float, default=0.)
     extra_proposal_jump = attr.ib(default=None)
@@ -210,6 +213,11 @@ class Sampler(object):
             raise ValueError('Need at least one temperature!')
         if (value < 0).any():
             raise ValueError('Temperatures must be non-negative.')
+
+    @temp_factor.validator
+    def _validate_temp_factor(self, attribute, value):
+        if value < 0.:
+            raise ValueError('Tempering factor must be > 0.')
 
     # TODO: check that if extra_proposal_prob>0, extra_proposal_jump is not None
     @extra_proposal_prob.validator
@@ -263,6 +271,7 @@ class Sampler(object):
                                  random=random,
                                  mapper=self._mapper,
                                  map_type=self._map_type,
+                                 temp_factor=self.temp_factor,
                                  extra_proposal_prob=self.extra_proposal_prob,
                                  extra_proposal_jump=self.extra_proposal_jump,
                                  ndim_ensemble=self.ndim_ensemble,
