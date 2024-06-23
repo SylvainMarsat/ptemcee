@@ -229,7 +229,10 @@ class Ensemble(object):
 
         # Construct into a pre-allocated ndarray.
         array = np.fromiter(results, float, 2 * length).reshape(shape + (2,))
-        return tuple(np.rollaxis(array, -1))
+        logl, logp = tuple(np.rollaxis(array, -1))
+        # NOTE: we added an extra global tempering factor applied to likelihoods
+        logl /= self.temp_factor
+        return logl, logp
 
     def _tempered_likelihood(self, logl, betas=None):
         """
@@ -244,9 +247,8 @@ class Ensemble(object):
         if betas is None:
             betas = self.betas
 
-        # NOTE: we added an extra global tempering factor applied to likelihoods
         with np.errstate(invalid='ignore'):
-            loglT = logl * betas[:, None] / self.temp_factor
+            loglT = logl * betas[:, None]
         loglT[np.isnan(loglT)] = -np.inf
 
         return loglT
@@ -301,7 +303,7 @@ class Ensemble(object):
 
             # NOTE: we added an extra global tempering factor applied to likelihoods
             raccept = np.log(self._random.uniform(size=nwalkers))
-            paccept = dbeta / self.temp_factor * (logl[i, iperm] - logl[i - 1, i1perm])
+            paccept = dbeta * (logl[i, iperm] - logl[i - 1, i1perm])
 
             # How many swaps were accepted?
             sel = (paccept > raccept)
