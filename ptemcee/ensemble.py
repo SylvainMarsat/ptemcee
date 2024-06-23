@@ -299,8 +299,9 @@ class Ensemble(object):
             else:
                 raise ValueError('swap_perm not recognized: %s' % swap_perm)
 
+            # NOTE: we added an extra global tempering factor applied to likelihoods
             raccept = np.log(self._random.uniform(size=nwalkers))
-            paccept = dbeta * (logl[i, iperm] - logl[i - 1, i1perm])
+            paccept = dbeta / self.temp_factor * (logl[i, iperm] - logl[i - 1, i1perm])
 
             # How many swaps were accepted?
             sel = (paccept > raccept)
